@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  address   String?
+  timezone  String   @default("America/New_York")
+  currency  String   @default("USD")
+  plan      String   @default("Starter")
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  leads       Lead[]
+  teams       Team[]
+  departments Department[]
+  settings    Setting[]
+  activities  Activity[]
+
+  @@map("companies")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  label       String
+  description String?
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id     String @id @default(cuid())
+  name   String @unique
+  label  String
+  module String
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  companyId String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users   User[]
+
+  @@map("departments")
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  companyId String
+  managerId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager User?      @relation("TeamManager", fields: [managerId], references: [id])
+  members UserTeam[]
+  leads   Lead[]
+
+  @@map("teams")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  password     String
+  phone        String?
+  roleId       String
+  companyId    String
+  departmentId String?
+  managerId    String?
+  status       String    @default("active")
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  role         Role          @relation(fields: [roleId], references: [id])
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  manager      User?         @relation("UserManager", fields: [managerId], references: [id])
+  reports      User[]        @relation("UserManager")
+  teams        UserTeam[]
+  managedTeams Team[]        @relation("TeamManager")
+  assignedLeads Lead[]       @relation("LeadAssignee")
+  createdLeads  Lead[]       @relation("LeadCreator")
+  followUps    FollowUp[]
+  appointments Appointment[]
+  activities   Activity[]
+
+  @@map("users")
+}
+
+model UserTeam {
+  userId String
+  teamId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+  @@map("user_teams")
+}
+
+model Lead {
+  id             String    @id @default(cuid())
+  name           String
+  contactName    String
+  phone          String?
+  email          String?
+  city           String?
+  source         String    @default("Website")
+  status         String    @default("New")
+  priority       String    @default("Medium")
+  dealValue      Float     @default(0)
+  nextFollowUpAt DateTime?
+  notes          String?
+  companyId      String
+  assignedToId   String?
+  teamId         String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedTo   User?         @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  team         Team?         @relation(fields: [teamId], references: [id])
+  createdBy    User          @relation("LeadCreator", fields: [createdById], references: [id])
+  followUps    FollowUp[]
+  appointments Appointment[]
+  activities   Activity[]
+
+  @@map("leads")
+}
+
+model FollowUp {
+  id          String   @id @default(cuid())
+  leadId      String
+  userId      String
+  scheduledAt DateTime
+  note        String?
+  status      String   @default("Pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("follow_ups")
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  leadId      String
+  userId      String
+  scheduledAt DateTime
+  meetingType String   @default("Phone Call")
+  location    String?
+  status      String   @default("Scheduled")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("appointments")
+}
+
+model Activity {
+  id         String   @id @default(cuid())
+  userId     String
+  companyId  String
+  leadId     String?
+  action     String
+  module     String
+  recordName String?
+  oldValue   String?
+  newValue   String?
+  createdAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lead    Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@map("activities")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  companyId String
+  key       String
+  value     String
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, key])
+  @@map("settings")
+}
